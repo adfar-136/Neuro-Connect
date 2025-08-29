@@ -11,8 +11,11 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Posts from './pages/Posts';
 import Doctors from './pages/Doctors';
+import DoctorProfile from './pages/DoctorProfile';
 import Sessions from './pages/Sessions';
+import StudentProfile from './pages/StudentProfile';
 import Chat from './pages/Chat';
+import AIChat from './pages/AIChat';
 import AdminPanel from './pages/AdminPanel';
 
 // Protected Route Component
@@ -51,6 +54,7 @@ const AppRoutes = () => {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
         <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
+        <Route path="/ai-chat" element={<AIChat />} />
         
         <Route path="/dashboard" element={
           <ProtectedRoute>
@@ -70,9 +74,21 @@ const AppRoutes = () => {
           </ProtectedRoute>
         } />
         
+        <Route path="/doctor/:doctorId" element={
+          <ProtectedRoute allowedRoles={['student']}>
+            <DoctorProfile />
+          </ProtectedRoute>
+        } />
+        
         <Route path="/sessions" element={
           <ProtectedRoute>
             <Sessions />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/student/:studentId" element={
+          <ProtectedRoute allowedRoles={['doctor']}>
+            <StudentProfile />
           </ProtectedRoute>
         } />
         

@@ -4,14 +4,14 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Get all active doctors
+// Get all doctors
 router.get('/doctors', authenticate, async (req, res) => {
   try {
-    const doctors = await User.find({
-      role: 'doctor',
+    const doctors = await User.find({ 
+      role: 'doctor', 
       isActive: true,
       verificationStatus: 'approved'
-    }).select('name specialization qualifications experience profileImage');
+    }).select('-password');
 
     res.json(doctors);
   } catch (error) {
@@ -19,21 +19,16 @@ router.get('/doctors', authenticate, async (req, res) => {
   }
 });
 
-// Get doctor by ID
-router.get('/doctors/:doctorId', authenticate, async (req, res) => {
+// Get a specific user by ID
+router.get('/:userId', authenticate, async (req, res) => {
   try {
-    const doctor = await User.findOne({
-      _id: req.params.doctorId,
-      role: 'doctor',
-      isActive: true,
-      verificationStatus: 'approved'
-    }).select('name specialization qualifications experience profileImage');
-
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
+    const user = await User.findById(req.params.userId).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json(doctor);
+    res.json(user);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

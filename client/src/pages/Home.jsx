@@ -1,8 +1,14 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Brain, MessageCircle, Users, Calendar, Shield, Heart } from 'lucide-react';
 
 const Home = () => {
+  const navigate = useNavigate();
+
+  const handleAIChat = () => {
+    navigate('/ai-chat');
+  };
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -58,10 +64,13 @@ const Home = () => {
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl p-8">
               <div className="flex items-start justify-between mb-6">
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-3">AI Chat</h3>
-                  <p className="text-gray-600 mb-6">Get instant support with our AI-powered chat feature.</p>
-                  <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                    Counselor Bot
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">AI Mental Health Chat</h3>
+                  <p className="text-gray-600 mb-6">Get instant support with our AI-powered mental health companion. Available 24/7 for confidential support.</p>
+                  <button 
+                    onClick={handleAIChat}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                  >
+                    Start Chat
                   </button>
                 </div>
                 <div className="bg-orange-100 rounded-2xl p-4">

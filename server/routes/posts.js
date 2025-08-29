@@ -72,7 +72,21 @@ router.post('/', authenticate, authorize('doctor'), requireActiveDoctor, upload.
 // Get all posts
 router.get('/', authenticate, async (req, res) => {
   try {
-    const posts = await Post.find({ isActive: true })
+    const posts = await Post.find()
+      .populate('author', 'name specialization profileImage')
+      .populate('comments.user', 'name profileImage')
+      .sort({ createdAt: -1 });
+
+    res.json(posts);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Get posts by a specific doctor
+router.get('/doctor/:doctorId', authenticate, async (req, res) => {
+  try {
+    const posts = await Post.find({ author: req.params.doctorId })
       .populate('author', 'name specialization profileImage')
       .populate('comments.user', 'name profileImage')
       .sort({ createdAt: -1 });
