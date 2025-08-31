@@ -89,6 +89,12 @@
 - [x] Implement user deletion functionality with confirmation modal and database cleanup
 - [x] Streamline user actions to only View and Delete (removed Edit option)
 - [x] Implement PDF export functionality for doctor analytics with comprehensive reporting
+- [x] Update frontend configuration to use deployed backend API (https://neuroconnectserver.onrender.com)
+- [x] Fix all hardcoded localhost:8000 URLs in frontend components
+- [x] Verify deployed backend API endpoints are working correctly
+- [x] Remove Vite proxy configuration and implement direct API calls
+- [x] Create centralized API configuration with buildApiUrl helper function
+- [x] Update all components to use direct backend API calls instead of proxy
 
 ## Current Status 🟢
 

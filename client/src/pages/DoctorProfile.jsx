@@ -16,6 +16,7 @@ import {
   MapPin
 } from 'lucide-react';
 import axios from 'axios';
+import { buildApiUrl } from '../config/api';
 
 const DoctorProfile = () => {
   const { doctorId } = useParams();
@@ -40,11 +41,11 @@ const DoctorProfile = () => {
   const fetchDoctorData = async () => {
     try {
       // Fetch doctor details
-      const doctorResponse = await axios.get(`/api/users/${doctorId}`);
+              const doctorResponse = await axios.get(buildApiUrl(`api/users/${doctorId}`));
       setDoctor(doctorResponse.data);
 
       // Fetch doctor's posts
-      const postsResponse = await axios.get(`/api/posts/doctor/${doctorId}`);
+              const postsResponse = await axios.get(buildApiUrl(`api/posts/doctor/${doctorId}`));
       setPosts(postsResponse.data);
     } catch (error) {
       console.error('Failed to fetch doctor data:', error);
@@ -64,7 +65,7 @@ const DoctorProfile = () => {
   const submitBooking = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('/api/sessions', {
+              await axios.post(buildApiUrl('api/sessions'), {
         ...bookingData,
         doctorId: doctor._id
       });
@@ -215,7 +216,7 @@ const DoctorProfile = () => {
                       <p className="text-gray-700 leading-relaxed">{post.content}</p>
                       {post.image && (
                         <img
-                          src={`http://localhost:8000${post.image}`}
+                          src={`https://neuroconnectserver.onrender.com${post.image}`}
                           alt="Post"
                           className="mt-4 w-full h-64 object-cover rounded-lg"
                         />

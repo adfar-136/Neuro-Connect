@@ -38,6 +38,7 @@ import {
   X
 } from 'lucide-react';
 import axios from 'axios';
+import { buildApiUrl } from '../config/api';
 
 const AdminPanel = () => {
   const [stats, setStats] = useState({});
@@ -74,12 +75,12 @@ const AdminPanel = () => {
         sessionAnalyticsResponse,
         userAnalyticsResponse
       ] = await Promise.all([
-        axios.get('/api/admin/stats'),
-        axios.get('/api/admin/users'),
-        axios.get('/api/admin/posts'),
-        axios.get('/api/admin/analytics/doctors'),
-        axios.get(`/api/admin/analytics/sessions?period=${analyticsPeriod}`),
-        axios.get(`/api/admin/analytics/users?period=${analyticsPeriod}`)
+        axios.get(buildApiUrl('api/admin/stats')),
+        axios.get(buildApiUrl('api/admin/users')),
+        axios.get(buildApiUrl('api/admin/posts')),
+        axios.get(buildApiUrl('api/admin/analytics/doctors')),
+        axios.get(buildApiUrl(`api/admin/analytics/sessions?period=${analyticsPeriod}`)),
+        axios.get(buildApiUrl(`api/admin/analytics/users?period=${analyticsPeriod}`))
       ]);
 
       // Ensure all data is properly formatted and safe for rendering
@@ -139,7 +140,7 @@ const AdminPanel = () => {
 
   const handleDeleteUser = async (userId) => {
     try {
-      await axios.delete(`/api/admin/users/${userId}`);
+              await axios.delete(buildApiUrl(`api/admin/users/${userId}`));
       setShowDeleteModal(false);
       setUserToDelete(null);
       fetchAdminData(); // Refresh data
@@ -171,7 +172,7 @@ const AdminPanel = () => {
           break;
         case 'verify':
           // Verify doctor
-          await axios.patch(`/api/admin/doctors/${userId}/verify`, { status: 'approved' });
+          await axios.patch(buildApiUrl(`api/admin/doctors/${userId}/verify`), { status: 'approved' });
           fetchAdminData(); // Refresh data
           break;
         default:
@@ -557,7 +558,7 @@ const AdminPanel = () => {
                         }
 
                         console.log('Starting PDF export...');
-                        const response = await fetch('/api/admin/analytics/doctors/pdf', {
+                        const response = await fetch(buildApiUrl('api/admin/analytics/doctors/pdf'), {
                           method: 'GET',
                           headers: {
                             'Authorization': `Bearer ${token}`,

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { buildApiUrl } from '../config/api';
 
 const AuthContext = createContext();
 
@@ -29,7 +30,7 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem('token');
       if (token) {
         try {
-          const response = await axios.get('/api/auth/me');
+          const response = await axios.get(buildApiUrl('api/auth/me'));
           setUser(response.data);
         } catch (error) {
           console.error('Token validation failed:', error);
@@ -45,7 +46,12 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/api/auth/login', { email, password });
+      console.log('🔐 Login attempt with:', { email, password });
+      console.log('📡 Sending request to:', buildApiUrl('api/auth/login'));
+      
+      const response = await axios.post(buildApiUrl('api/auth/login'), { email, password });
+      console.log('✅ Login successful:', response.data);
+      
       const { user, token } = response.data;
       
       localStorage.setItem('token', token);
@@ -54,6 +60,11 @@ export const AuthProvider = ({ children }) => {
       
       return { success: true, user };
     } catch (error) {
+      console.error('❌ Login failed:', error);
+      console.error('📊 Response data:', error.response?.data);
+      console.error('📈 Response status:', error.response?.status);
+      console.error('📋 Response headers:', error.response?.headers);
+      
       return { 
         success: false, 
         message: error.response?.data?.message || 'Login failed' 
@@ -79,7 +90,7 @@ export const AuthProvider = ({ children }) => {
         });
       }
 
-      const response = await axios.post('/api/auth/register', formData, {
+      const response = await axios.post(buildApiUrl('api/auth/register'), formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

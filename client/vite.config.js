@@ -12,17 +12,6 @@ export default defineConfig({
     port: 5173,
     strictPort: false, // Allow fallback to other ports if 5173 is busy
     host: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/socket.io': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        ws: true
-      }
-    },
   },
   resolve: {
     alias: {

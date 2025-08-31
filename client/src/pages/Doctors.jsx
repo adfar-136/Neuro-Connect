@@ -2,9 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, MessageCircle, Star, Clock, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { buildApiUrl } from '../config/api';
+import { useAuth } from '../context/AuthContext';
 
 const Doctors = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [doctors, setDoctors] = useState([]);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -23,7 +26,7 @@ const Doctors = () => {
 
   const fetchDoctors = async () => {
     try {
-      const response = await axios.get('/api/users/doctors');
+      const response = await axios.get(buildApiUrl('api/users/doctors'));
       setDoctors(response.data);
     } catch (error) {
       console.error('Failed to fetch doctors:', error);
@@ -43,12 +46,31 @@ const Doctors = () => {
 
   const submitBooking = async (e) => {
     e.preventDefault();
+    
+    // Check if user is logged in
+    if (!user) {
+      alert('Please log in to book a session');
+      navigate('/login');
+      return;
+    }
+    
     try {
-      await axios.post('/api/sessions', {
+      // Get the current token
+      const token = localStorage.getItem('token');
+      console.log('🔐 Current token:', token);
+      console.log('👤 Current user:', user);
+      console.log('📤 Sending session booking request:', {
+        ...bookingData,
+        doctorId: selectedDoctor._id
+      });
+      console.log('📡 Request URL:', buildApiUrl('api/sessions'));
+      
+      const response = await axios.post(buildApiUrl('api/sessions'), {
         ...bookingData,
         doctorId: selectedDoctor._id
       });
 
+      console.log('✅ Session booking successful:', response.data);
       alert('Session request sent successfully! The doctor will respond soon.');
       setShowBookingModal(false);
       setBookingData({
@@ -59,7 +81,10 @@ const Doctors = () => {
         preferredDateTime: ''
       });
     } catch (error) {
-      console.error('Failed to book session:', error);
+      console.error('❌ Failed to book session:', error);
+      console.error('📊 Error response:', error.response?.data);
+      console.error('📈 Error status:', error.response?.status);
+      console.error('📋 Error headers:', error.response?.headers);
       alert('Failed to book session. Please try again.');
     }
   };

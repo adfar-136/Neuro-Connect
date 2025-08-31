@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, MessageCircle, FileText, Users, Clock, CheckCircle, XCircle } from 'lucide-react';
 import axios from 'axios';
+import { buildApiUrl } from '../config/api';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -21,7 +22,7 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       // Fetch user's sessions
-      const sessionsResponse = await axios.get('/api/sessions/my-sessions');
+              const sessionsResponse = await axios.get(buildApiUrl('api/sessions/my-sessions'));
       const sessions = sessionsResponse.data;
       
       // Calculate stats based on user role

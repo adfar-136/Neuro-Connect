@@ -47,8 +47,7 @@ const sessionSchema = new mongoose.Schema({
     default: 'pending'
   },
   chatRoom: {
-    type: String,
-    unique: true
+    type: String
   },
   notes: {
     type: String,
