@@ -49,9 +49,11 @@ const Navbar = () => {
                     Find Doctors
                   </Link>
                 )}
-                <Link to="/sessions" className="text-gray-700 hover:text-emerald-600 font-medium transition-colors">
-                  Sessions
-                </Link>
+                {user.role !== 'admin' && (
+                  <Link to="/sessions" className="text-gray-700 hover:text-emerald-600 font-medium transition-colors">
+                    Sessions
+                  </Link>
+                )}
                 {user.role === 'admin' && (
                   <Link to="/admin" className="text-gray-700 hover:text-emerald-600 font-medium transition-colors">
                     Admin Panel
@@ -135,13 +137,15 @@ const Navbar = () => {
                       Find Doctors
                     </Link>
                   )}
-                  <Link
-                    to="/sessions"
-                    className="block px-3 py-2 text-gray-700 hover:text-emerald-600 font-medium"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Sessions
-                  </Link>
+                  {user.role !== 'admin' && (
+                    <Link
+                      to="/sessions"
+                      className="block px-3 py-2 text-gray-700 hover:text-emerald-600 font-medium"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Sessions
+                    </Link>
+                  )}
                   {user.role === 'admin' && (
                     <Link
                       to="/admin"

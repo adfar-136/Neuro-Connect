@@ -38,6 +38,10 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   }
   
   if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    // Redirect admin users to admin panel, others to dashboard
+    if (user.role === 'admin') {
+      return <Navigate to="/admin" />;
+    }
     return <Navigate to="/dashboard" />;
   }
   
@@ -51,21 +55,25 @@ const AppRoutes = () => {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
-        <Route path="/ai-chat" element={<AIChat />} />
+        <Route path="/" element={user && user.role === 'admin' ? <Navigate to="/admin" /> : <Home />} />
+        <Route path="/login" element={user ? (user.role === 'admin' ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />) : <Login />} />
+        <Route path="/register" element={user ? (user.role === 'admin' ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />) : <Register />} />
+        <Route path="/ai-chat" element={user && user.role === 'admin' ? <Navigate to="/admin" /> : <AIChat />} />
         
         <Route path="/dashboard" element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
+          user && user.role === 'admin' ? <Navigate to="/admin" /> : (
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          )
         } />
         
         <Route path="/posts" element={
-          <ProtectedRoute>
-            <Posts />
-          </ProtectedRoute>
+          user && user.role === 'admin' ? <Navigate to="/admin" /> : (
+            <ProtectedRoute>
+              <Posts />
+            </ProtectedRoute>
+          )
         } />
         
         <Route path="/doctors" element={
@@ -81,9 +89,11 @@ const AppRoutes = () => {
         } />
         
         <Route path="/sessions" element={
-          <ProtectedRoute>
-            <Sessions />
-          </ProtectedRoute>
+          user && user.role === 'admin' ? <Navigate to="/admin" /> : (
+            <ProtectedRoute>
+              <Sessions />
+            </ProtectedRoute>
+          )
         } />
         
         <Route path="/student/:studentId" element={
@@ -93,9 +103,11 @@ const AppRoutes = () => {
         } />
         
         <Route path="/chat/:sessionId" element={
-          <ProtectedRoute>
-            <Chat />
-          </ProtectedRoute>
+          user && user.role === 'admin' ? <Navigate to="/admin" /> : (
+            <ProtectedRoute>
+              <Chat />
+            </ProtectedRoute>
+          )
         } />
         
         <Route path="/admin" element={

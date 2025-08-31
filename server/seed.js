@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import User from './models/User.js';
 import Post from './models/Post.js';
+import Session from './models/Session.js';
 
 // Connect to MongoDB
 const connectDB = async () => {
@@ -20,6 +21,7 @@ const seedData = async () => {
     // Clear existing data
     await User.deleteMany({});
     await Post.deleteMany({});
+    await Session.deleteMany({});
     console.log('Cleared existing data');
 
     // Create admin user
@@ -274,10 +276,52 @@ Together, we can create a world where mental health is treated with the same imp
       console.log('Post created:', post.title);
     }
 
+    // Create sample sessions
+    const sessions = [
+      {
+        student: savedStudents[0]._id,
+        doctor: savedDoctors[0]._id,
+        title: 'Anxiety Management Session',
+        description: 'I\'ve been experiencing increased anxiety during exams and need help developing coping strategies.',
+        isAnonymous: false,
+        preferredDateTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+        duration: 60,
+        status: 'approved'
+      },
+      {
+        student: savedStudents[1]._id,
+        doctor: savedDoctors[1]._id,
+        title: 'Stress and Academic Pressure',
+        description: 'Feeling overwhelmed with coursework and need guidance on stress management.',
+        isAnonymous: true,
+        anonymousName: 'Stressed Student',
+        preferredDateTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // Day after tomorrow
+        duration: 45,
+        status: 'pending'
+      },
+      {
+        student: savedStudents[2]._id,
+        doctor: savedDoctors[2]._id,
+        title: 'Building Self-Confidence',
+        description: 'Struggling with low self-esteem and need help building confidence.',
+        isAnonymous: false,
+        preferredDateTime: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago (expired)
+        duration: 60,
+        status: 'approved'
+      }
+    ];
+
+    for (const sessionData of sessions) {
+      const session = new Session(sessionData);
+      await session.save();
+      console.log('Session created:', session.title);
+    }
+
     console.log('\n✅ Database seeded successfully!');
     console.log(`📊 Created ${savedDoctors.length} doctors`);
     console.log(`📊 Created ${savedStudents.length} students`);
     console.log(`📊 Created ${posts.length} posts`);
+    console.log(`📊 Created ${sessions.length} sessions`);
     console.log(`👑 Admin user: idrees@gmail.com / admin@123`);
     console.log(`👨‍⚕️ Doctor users: doctor123 (for all doctors)`);
     console.log(`👨‍🎓 Student users: student123 (for all students)`);

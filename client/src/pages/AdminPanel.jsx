@@ -26,41 +26,69 @@ import {
   Trash2,
   Download,
   Filter,
-  Search
+  Search,
+  PieChart,
+  LineChart,
+  Target,
+  Zap,
+  Users as UsersIcon,
+  CalendarDays,
+  MessageSquare,
+  FileText as FileTextIcon,
+  X
 } from 'lucide-react';
 import axios from 'axios';
 
 const AdminPanel = () => {
   const [stats, setStats] = useState({});
-  const [pendingDoctors, setPendingDoctors] = useState([]);
-  const [allDoctors, setAllDoctors] = useState([]);
+
   const [allUsers, setAllUsers] = useState([]);
+  const [allPosts, setAllPosts] = useState([]);
+  const [doctorAnalytics, setDoctorAnalytics] = useState([]);
+  const [sessionAnalytics, setSessionAnalytics] = useState({});
+  const [userAnalytics, setUserAnalytics] = useState({});
   const [recentActivity, setRecentActivity] = useState([]);
-  const [systemHealth, setSystemHealth] = useState({});
+
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
-  const [sortBy, setSortBy] = useState('name');
-  const [sortOrder, setSortOrder] = useState('asc');
+  const [analyticsPeriod, setAnalyticsPeriod] = useState('7d');
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   useEffect(() => {
     fetchAdminData();
-  }, []);
+  }, [analyticsPeriod]);
 
   const fetchAdminData = async () => {
     try {
-      const [statsResponse, pendingResponse, doctorsResponse, usersResponse] = await Promise.all([
+      const [
+        statsResponse, 
+        usersResponse,
+        postsResponse,
+        doctorAnalyticsResponse,
+        sessionAnalyticsResponse,
+        userAnalyticsResponse
+      ] = await Promise.all([
         axios.get('/api/admin/stats'),
-        axios.get('/api/admin/doctors/pending'),
-        axios.get('/api/admin/doctors'),
-        axios.get('/api/admin/users')
+        axios.get('/api/admin/users'),
+        axios.get('/api/admin/posts'),
+        axios.get('/api/admin/analytics/doctors'),
+        axios.get(`/api/admin/analytics/sessions?period=${analyticsPeriod}`),
+        axios.get(`/api/admin/analytics/users?period=${analyticsPeriod}`)
       ]);
 
-      setStats(statsResponse.data);
-      setPendingDoctors(pendingResponse.data);
-      setAllDoctors(doctorsResponse.data);
-      setAllUsers(usersResponse.data);
+      // Ensure all data is properly formatted and safe for rendering
+      setStats(statsResponse.data || {});
+      setAllUsers(usersResponse.data || []);
+      setAllPosts(postsResponse.data?.posts || []);
+      setDoctorAnalytics(doctorAnalyticsResponse.data || []);
+      setSessionAnalytics(sessionAnalyticsResponse.data || {});
+      setUserAnalytics(userAnalyticsResponse.data || {});
       
       // Generate mock recent activity data
       setRecentActivity([
@@ -98,40 +126,77 @@ const AdminPanel = () => {
         }
       ]);
 
-      // Mock system health data
-      setSystemHealth({
-        database: 'healthy',
-        api: 'healthy',
-        socket: 'healthy',
-        storage: '85%',
-        uptime: '99.9%',
-        lastBackup: new Date(Date.now() - 24 * 60 * 60 * 1000)
-      });
+
+
+      setLoading(false);
     } catch (error) {
-      console.error('Failed to fetch admin data:', error);
-    } finally {
+      console.error('Error fetching admin data:', error);
       setLoading(false);
     }
   };
 
-  const handleDoctorVerification = async (doctorId, status) => {
+
+
+  const handleDeleteUser = async (userId) => {
     try {
-      await axios.patch(`/api/admin/doctors/${doctorId}/verify`, { status });
-      
-      // Refresh data
-      fetchAdminData();
+      await axios.delete(`/api/admin/users/${userId}`);
+      setShowDeleteModal(false);
+      setUserToDelete(null);
+      fetchAdminData(); // Refresh data
     } catch (error) {
-      console.error('Failed to verify doctor:', error);
+      console.error('Error deleting user:', error);
+      alert('Failed to delete user. Please try again.');
     }
   };
 
-  const getVerificationStatusColor = (status) => {
+  const handleUserAction = async (userId, action) => {
+    try {
+      switch (action) {
+        case 'view':
+          // Find the user and show profile modal
+          const user = allUsers.find(u => u._id === userId);
+          if (user) {
+            setSelectedUser(user);
+            setShowProfileModal(true);
+          }
+          break;
+
+        case 'delete':
+          // Show delete confirmation modal
+          const userToDelete = allUsers.find(u => u._id === userId);
+          if (userToDelete) {
+            setUserToDelete(userToDelete);
+            setShowDeleteModal(true);
+          }
+          break;
+        case 'verify':
+          // Verify doctor
+          await axios.patch(`/api/admin/doctors/${userId}/verify`, { status: 'approved' });
+          fetchAdminData(); // Refresh data
+          break;
+        default:
+          console.log('Unknown action:', action);
+      }
+    } catch (error) {
+      console.error('Error performing user action:', error);
+    }
+  };
+
+  const getStatusColor = (status) => {
     switch (status) {
       case 'approved': return 'text-green-600 bg-green-100';
       case 'pending': return 'text-yellow-600 bg-yellow-100';
       case 'rejected': return 'text-red-600 bg-red-100';
       default: return 'text-gray-600 bg-gray-100';
     }
+  };
+
+
+
+  const safeRenderValue = (value) => {
+    if (value === null || value === undefined) return 'N/A';
+    if (typeof value === 'object' && value instanceof Date) return value.toLocaleString();
+    return String(value);
   };
 
   if (loading) {
@@ -150,615 +215,894 @@ const AdminPanel = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Panel</h1>
-          <p className="text-gray-600 mt-2">Manage platform users and verify doctors</p>
+          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <p className="text-gray-600 mt-2">Monitor and manage the Neuro Connect platform</p>
         </div>
 
-        {/* Tabs */}
+        {/* Navigation Tabs */}
         <div className="mb-8">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 overflow-x-auto">
+          <nav className="flex space-x-8">
+            {[
+              { id: 'overview', label: 'Overview', icon: BarChart3 },
+              { id: 'users', label: 'Users', icon: Users },
+              { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+              { id: 'posts', label: 'Posts', icon: FileText }
+            ].map((tab) => (
               <button
-                onClick={() => setActiveTab('overview')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'overview' 
-                    ? 'border-emerald-500 text-emerald-600' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-emerald-500 text-white'
+                    : 'text-gray-600 hover:text-emerald-600 hover:bg-emerald-50'
                 }`}
               >
-                Overview
+                <tab.icon className="h-4 w-4" />
+                <span>{tab.label}</span>
               </button>
-              <button
-                onClick={() => setActiveTab('pending')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'pending' 
-                    ? 'border-emerald-500 text-emerald-600' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Pending Approvals ({pendingDoctors.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('doctors')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'doctors' 
-                    ? 'border-emerald-500 text-emerald-600' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                All Doctors
-              </button>
-              <button
-                onClick={() => setActiveTab('users')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'users' 
-                    ? 'border-emerald-500 text-emerald-600' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                All Users
-              </button>
-              <button
-                onClick={() => setActiveTab('activity')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'activity' 
-                    ? 'border-emerald-500 text-emerald-600' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Recent Activity
-              </button>
-              <button
-                onClick={() => setActiveTab('system')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'system' 
-                    ? 'border-emerald-500 text-emerald-600' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                System Health
-              </button>
-            </nav>
-          </div>
+            ))}
+          </nav>
         </div>
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div>
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="space-y-6">
+            {/* Key Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white rounded-xl shadow-md p-6">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <div className="p-2 bg-blue-100 rounded-lg">
                     <Users className="h-6 w-6 text-blue-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm text-gray-600">Total Users</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalUsers || 0}</p>
-                    <p className="text-xs text-green-600">+12% from last month</p>
+                    <p className="text-sm font-medium text-gray-600">Total Users</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.users?.total || 0}</p>
                   </div>
+                </div>
+                <div className="mt-4 flex items-center text-sm text-gray-600">
+                  <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                  <span>+{stats.weeklyGrowth?.newUsers || 0} this week</span>
                 </div>
               </div>
 
               <div className="bg-white rounded-xl shadow-md p-6">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Users className="h-6 w-6 text-green-600" />
+                  <div className="p-2 bg-emerald-100 rounded-lg">
+                    <UserCheck className="h-6 w-6 text-emerald-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm text-gray-600">Students</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalStudents || 0}</p>
-                    <p className="text-xs text-green-600">+8% from last month</p>
+                    <p className="text-sm font-medium text-gray-600">Active Doctors</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.users?.activeDoctors || 0}</p>
                   </div>
+                </div>
+                <div className="mt-4 flex items-center text-sm text-gray-600">
+                  <Clock className="h-4 w-4 text-yellow-500 mr-1" />
+                  <span>{stats.users?.pendingDoctors || 0} pending verification</span>
                 </div>
               </div>
 
               <div className="bg-white rounded-xl shadow-md p-6">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
-                    <CheckCircle className="h-6 w-6 text-emerald-600" />
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Calendar className="h-6 w-6 text-purple-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm text-gray-600">Active Doctors</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.activeDoctors || 0}</p>
-                    <p className="text-xs text-green-600">+15% from last month</p>
+                    <p className="text-sm font-medium text-gray-600">Total Sessions</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.sessions?.total || 0}</p>
                   </div>
+                </div>
+                <div className="mt-4 flex items-center text-sm text-gray-600">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                  <span>{stats.sessions?.completed || 0} completed</span>
                 </div>
               </div>
 
               <div className="bg-white rounded-xl shadow-md p-6">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <Clock className="h-6 w-6 text-orange-600" />
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <FileText className="h-6 w-6 text-orange-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm text-gray-600">Pending Approvals</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.pendingDoctors || 0}</p>
-                    <p className="text-xs text-red-600">Requires attention</p>
+                    <p className="text-sm font-medium text-gray-600">Total Posts</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.posts?.total || 0}</p>
                   </div>
+                </div>
+                <div className="mt-4 flex items-center text-sm text-gray-600">
+                  <FileText className="h-4 w-4 text-blue-500 mr-1" />
+                  <span>{stats.posts?.published || 0} published</span>
                 </div>
               </div>
             </div>
 
-            {/* Additional Stats */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {/* Platform Growth */}
-              <div className="bg-white rounded-xl shadow-md p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <TrendingUp className="h-5 w-5 text-emerald-600 mr-2" />
-                  Platform Growth
-                </h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">New registrations this week</span>
-                    <span className="text-sm font-medium text-gray-900">24</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Active sessions today</span>
-                    <span className="text-sm font-medium text-gray-900">156</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Messages sent today</span>
-                    <span className="text-sm font-medium text-gray-900">1,247</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">File uploads today</span>
-                    <span className="text-sm font-medium text-gray-900">89</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Platform Insights */}
-              <div className="bg-white rounded-xl shadow-md p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <BarChart3 className="h-5 w-5 text-blue-600 mr-2" />
-                  Platform Insights
-                </h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                      <span className="text-sm text-gray-700">Peak usage time</span>
+            {/* Recent Activity */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
+              <div className="space-y-3">
+                {recentActivity.map((activity) => (
+                  <div key={activity.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="p-2 bg-emerald-100 rounded-lg">
+                      <activity.icon className="h-4 w-4 text-emerald-600" />
                     </div>
-                    <span className="text-sm font-medium text-gray-900">2:00 PM - 6:00 PM</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span className="text-sm text-gray-700">Most active day</span>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">Wednesday</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                      <span className="text-sm text-gray-700">Popular specialization</span>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">Clinical Psychology</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                      <span className="text-sm text-gray-700">Avg. session duration</span>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">45 minutes</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Pending Approvals Tab */}
-        {activeTab === 'pending' && (
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Doctors Pending Verification</h2>
-            
-            {pendingDoctors.length > 0 ? (
-              <div className="space-y-4">
-                {pendingDoctors.map((doctor) => (
-                  <div key={doctor._id} className="border border-gray-200 rounded-lg p-6">
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900">{doctor.name}</h3>
-                        <p className="text-gray-600">{doctor.email}</p>
-                        <div className="mt-4 space-y-2">
-                          <div>
-                            <span className="text-sm font-medium text-gray-700">Specialization: </span>
-                            <span className="text-sm text-gray-600">{doctor.specialization}</span>
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium text-gray-700">Qualifications: </span>
-                            <span className="text-sm text-gray-600">{doctor.qualifications}</span>
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium text-gray-700">Experience: </span>
-                            <span className="text-sm text-gray-600">{doctor.experience} years</span>
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium text-gray-700">License: </span>
-                            <span className="text-sm text-gray-600">{doctor.licenseNumber}</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <div className="mb-4">
-                          <span className="text-sm font-medium text-gray-700">Documents:</span>
-                          {doctor.documents && doctor.documents.length > 0 ? (
-                            <div className="mt-2 space-y-1">
-                              {doctor.documents.map((doc, index) => (
-                                <div key={index} className="flex items-center space-x-2">
-                                  <FileText className="h-4 w-4 text-gray-400" />
-                                  <a
-                                    href={`http://localhost:8000/${doc.path}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-sm text-blue-600 hover:text-blue-700 underline"
-                                  >
-                                    {doc.name}
-                                  </a>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-gray-500 mt-1">No documents uploaded</p>
-                          )}
-                        </div>
-                        
-                        <div className="flex space-x-3">
-                          <button
-                            onClick={() => handleDoctorVerification(doctor._id, 'approved')}
-                            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                            <span>Approve</span>
-                          </button>
-                          <button
-                            onClick={() => handleDoctorVerification(doctor._id, 'rejected')}
-                            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                          >
-                            <XCircle className="h-4 w-4" />
-                            <span>Reject</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <CheckCircle className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No pending approvals</h3>
-                <p className="text-gray-600">All doctor registrations have been processed.</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* All Doctors Tab */}
-        {activeTab === 'doctors' && (
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">All Doctors</h2>
-            
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Doctor
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Specialization
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Experience
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Verified Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {allDoctors.map((doctor) => (
-                    <tr key={doctor._id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{doctor.name}</div>
-                          <div className="text-sm text-gray-500">{doctor.email}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{doctor.specialization}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{doctor.experience} years</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getVerificationStatusColor(doctor.verificationStatus)}`}>
-                          {doctor.verificationStatus}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {doctor.verificationDate ? 
-                          new Date(doctor.verificationDate).toLocaleDateString() : 
-                          'Not verified'
-                        }
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button className="text-blue-600 hover:text-blue-900">
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button className="text-emerald-600 hover:text-emerald-900">
-                            <Edit className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* All Users Tab */}
-        {activeTab === 'users' && (
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">All Users</h2>
-              <div className="flex space-x-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search users..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
-                </div>
-                <select
-                  value={filterRole}
-                  onChange={(e) => setFilterRole(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                >
-                  <option value="all">All Roles</option>
-                  <option value="student">Students</option>
-                  <option value="doctor">Doctors</option>
-                  <option value="admin">Admins</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      User
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Role
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Joined
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {allUsers
-                    .filter(user => 
-                      (filterRole === 'all' || user.role === filterRole) &&
-                      (searchTerm === '' || 
-                       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                       user.email.toLowerCase().includes(searchTerm.toLowerCase()))
-                    )
-                    .map((user) => (
-                    <tr key={user._id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                          user.role === 'doctor' ? 'bg-blue-100 text-blue-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {user.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button className="text-blue-600 hover:text-blue-900">
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button className="text-emerald-600 hover:text-emerald-900">
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button className="text-red-600 hover:text-red-900">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Recent Activity Tab */}
-        {activeTab === 'activity' && (
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Recent Activity</h2>
-            
-            <div className="space-y-4">
-              {recentActivity.map((activity) => {
-                const IconComponent = activity.icon;
-                return (
-                  <div key={activity.id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg">
-                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <IconComponent className="h-5 w-5 text-emerald-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1">
                       <p className="text-sm text-gray-900">
                         <span className="font-medium">{activity.user}</span> {activity.action}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500">
                         {activity.timestamp.toLocaleString()}
                       </p>
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </div>
         )}
 
-        {/* System Health Tab */}
-        {activeTab === 'system' && (
+
+
+        {/* Users Tab */}
+        {activeTab === 'users' && (
           <div className="space-y-6">
-            {/* System Status */}
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                <Activity className="h-6 w-6 text-emerald-600 mr-2" />
-                System Status
-              </h2>
+            {/* User Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Users className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Users</p>
+                    <p className="text-2xl font-bold text-gray-900">{allUsers.filter(u => u.role !== 'admin').length}</p>
+                  </div>
+                </div>
+              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="text-center">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
-                    systemHealth.database === 'healthy' ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
-                    <Shield className={`h-8 w-8 ${
-                      systemHealth.database === 'healthy' ? 'text-green-600' : 'text-red-600'
-                    }`} />
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Users className="h-6 w-6 text-green-600" />
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900">Database</h3>
-                  <p className={`text-sm ${
-                    systemHealth.database === 'healthy' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {systemHealth.database}
-                  </p>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Students</p>
+                    <p className="text-2xl font-bold text-gray-900">{allUsers.filter(u => u.role === 'student').length}</p>
+                  </div>
                 </div>
-
-                <div className="text-center">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
-                    systemHealth.api === 'healthy' ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
-                    <BarChart3 className={`h-8 w-8 ${
-                      systemHealth.api === 'healthy' ? 'text-green-600' : 'text-red-600'
-                    }`} />
+              </div>
+              
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <UserCheck className="h-6 w-6 text-blue-600" />
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900">API</h3>
-                  <p className={`text-sm ${
-                    systemHealth.api === 'healthy' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {systemHealth.api}
-                  </p>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Doctors</p>
+                    <p className="text-2xl font-bold text-gray-900">{allUsers.filter(u => u.role === 'doctor').length}</p>
+                  </div>
                 </div>
+              </div>
+              
 
-                <div className="text-center">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
-                    systemHealth.socket === 'healthy' ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
-                    <MessageCircle className={`h-8 w-8 ${
-                      systemHealth.socket === 'healthy' ? 'text-green-600' : 'text-red-600'
-                    }`} />
+            </div>
+
+            {/* Search and Filter */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+                <div className="flex-1 max-w-md">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search users..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900">WebSocket</h3>
-                  <p className={`text-sm ${
-                    systemHealth.socket === 'healthy' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {systemHealth.socket}
-                  </p>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <select
+                    value={filterRole}
+                    onChange={(e) => setFilterRole(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="all">All Roles</option>
+                    <option value="student">Students</option>
+                    <option value="doctor">Doctors</option>
+                  </select>
+
                 </div>
               </div>
             </div>
 
-            {/* System Metrics */}
+            {/* Users List */}
             <div className="bg-white rounded-xl shadow-md p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">System Metrics</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">All Users</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {allUsers
+                      .filter(user => user.role !== 'admin') // Exclude admin users
+                      .filter(user => {
+                        const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                            user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+                        const matchesRole = filterRole === 'all' || user.role === filterRole;
+                        return matchesSearch && matchesRole;
+                      })
+                      .map((user) => (
+                        <tr key={user._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                                <span className="text-sm font-bold text-emerald-600">
+                                  {user.name?.charAt(0) || 'U'}
+                                </span>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{user.name || 'Unknown'}</div>
+                                <div className="text-sm text-gray-500">{user.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                              user.role === 'doctor' ? 'bg-blue-100 text-blue-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              user.role === 'doctor' ? 
+                                (user.verificationStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                                 user.verificationStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                 'bg-red-100 text-red-800') :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {user.role === 'doctor' ? user.verificationStatus || 'pending' : 'Active'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button 
+                              onClick={() => handleUserAction(user._id, 'view')}
+                              className="text-emerald-600 hover:text-emerald-900 mr-3"
+                            >
+                              View
+                            </button>
+
+                            {user.role === 'doctor' && user.verificationStatus === 'pending' && (
+                              <button 
+                                onClick={() => handleUserAction(user._id, 'verify')}
+                                className="text-orange-600 hover:text-orange-900 mr-3"
+                              >
+                                Verify
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => handleUserAction(user._id, 'delete')}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Storage Usage</span>
-                    <span className="text-sm font-medium text-gray-900">{systemHealth.storage}</span>
+              {/* Empty State */}
+              {allUsers
+                .filter(user => user.role !== 'admin') // Exclude admin users
+                .filter(user => {
+                  const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+                  const matchesRole = filterRole === 'all' || user.role === filterRole;
+                  return matchesSearch && matchesRole;
+                }).length === 0 && (
+                <div className="text-center py-8">
+                  <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
+                  <p className="text-gray-600">
+                    {searchTerm || filterRole !== 'all' 
+                      ? 'Try adjusting your search or filter criteria.' 
+                      : 'No users have been registered yet.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-6">
+            {/* Period Selector */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Analytics Period</h3>
+                <div className="flex items-center space-x-4">
+                  <select
+                    value={analyticsPeriod}
+                    onChange={(e) => setAnalyticsPeriod(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="90d">Last 90 Days</option>
+                  </select>
+                  <button
+                    onClick={async () => {
+                      if (isExportingPDF) return;
+                      
+                      try {
+                        setIsExportingPDF(true);
+                        const token = localStorage.getItem('token');
+                        if (!token) {
+                          alert('Please log in to export PDF');
+                          return;
+                        }
+
+                        console.log('Starting PDF export...');
+                        const response = await fetch('/api/admin/analytics/doctors/pdf', {
+                          method: 'GET',
+                          headers: {
+                            'Authorization': `Bearer ${token}`,
+                          },
+                        });
+
+                        console.log('Response status:', response.status);
+                        console.log('Response headers:', response.headers);
+
+                        if (response.ok) {
+                          const blob = await response.blob();
+                          console.log('PDF blob size:', blob.size);
+                          
+                          if (blob.size === 0) {
+                            alert('Generated PDF is empty. Please try again.');
+                            return;
+                          }
+
+                          const url = window.URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = `doctor-analytics-${new Date().toISOString().split('T')[0]}.pdf`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          window.URL.revokeObjectURL(url);
+                          
+                          console.log('PDF downloaded successfully');
+                        } else {
+                          const errorText = await response.text();
+                          console.error('Failed to generate PDF:', response.status, errorText);
+                          
+                          if (response.status === 401) {
+                            alert('Authentication failed. Please log in again.');
+                          } else if (response.status === 403) {
+                            alert('Access denied. Admin privileges required.');
+                          } else {
+                            alert(`Failed to generate PDF (${response.status}). Please try again.`);
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Error generating PDF:', error);
+                        alert('Network error. Please check your connection and try again.');
+                      } finally {
+                        setIsExportingPDF(false);
+                      }
+                    }}
+                    disabled={isExportingPDF}
+                    className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                      isExportingPDF 
+                        ? 'bg-gray-400 cursor-not-allowed' 
+                        : 'bg-emerald-500 hover:bg-emerald-600'
+                    } text-white`}
+                  >
+                    {isExportingPDF ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Generating PDF...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        <span>Export PDF</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Doctor Performance */}
+              <div className="mb-6">
+                <h4 className="text-md font-semibold text-gray-900 mb-3">Doctor Performance</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {doctorAnalytics.slice(0, 6).map((doctor) => (
+                    <div key={doctor.id} className="p-4 border border-gray-200 rounded-lg">
+                      <h5 className="font-medium text-gray-900 mb-2">{doctor.name}</h5>
+                      <div className="space-y-1 text-sm">
+                        <p>Total Sessions: {doctor.stats.totalSessions}</p>
+                        <p>Completed: {doctor.stats.completedSessions}</p>
+                        <p>Pending: {doctor.stats.pendingSessions}</p>
+                        <p>Avg Duration: {doctor.stats.avgDuration} min</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Session Statistics */}
+              <div className="mb-6">
+                <h4 className="text-md font-semibold text-gray-900 mb-3">Session Statistics</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <p className="text-2xl font-bold text-blue-600">{sessionAnalytics?.totalSessions || 0}</p>
+                    <p className="text-sm text-blue-800">Total Sessions</p>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-emerald-600 h-2 rounded-full" style={{ width: '85%' }}></div>
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <p className="text-2xl font-bold text-green-600">{sessionAnalytics?.dailyStats ? Object.values(sessionAnalytics.dailyStats).reduce((sum, day) => sum + (day?.completed || 0), 0) : 0}</p>
+                    <p className="text-sm text-green-800">Completed</p>
                   </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Uptime</span>
-                    <span className="text-sm font-medium text-gray-900">{systemHealth.uptime}</span>
+                  <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                    <p className="text-2xl font-bold text-yellow-600">{sessionAnalytics?.dailyStats ? Object.values(sessionAnalytics.dailyStats).reduce((sum, day) => sum + (day?.pending || 0), 0) : 0}</p>
+                    <p className="text-sm text-yellow-800">Pending</p>
                   </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Last Backup</span>
-                    <span className="text-sm font-medium text-gray-900">
-                      {systemHealth.lastBackup.toLocaleDateString()}
+                  <div className="text-center p-4 bg-red-50 rounded-lg">
+                    <p className="text-2xl font-bold text-red-600">{sessionAnalytics?.dailyStats ? Object.values(sessionAnalytics.dailyStats).reduce((sum, day) => sum + (day?.expired || 0), 0) : 0}</p>
+                    <p className="text-sm text-red-800">Expired</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* User Growth */}
+              <div>
+                <h4 className="text-md font-semibold text-gray-900 mb-3">User Growth</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-purple-50 rounded-lg">
+                    <p className="text-2xl font-bold text-purple-600">{userAnalytics.totalUsers || 0}</p>
+                    <p className="text-sm text-purple-800">New Users</p>
+                  </div>
+                  <div className="text-center p-4 bg-indigo-50 rounded-lg">
+                    <p className="text-2xl font-bold text-indigo-600">{userAnalytics.dailyStats ? Object.values(userAnalytics.dailyStats).reduce((sum, day) => sum + day.students, 0) : 0}</p>
+                    <p className="text-sm text-indigo-800">Students</p>
+                  </div>
+                  <div className="text-center p-4 bg-teal-50 rounded-lg">
+                    <p className="text-2xl font-bold text-teal-600">{userAnalytics.dailyStats ? Object.values(userAnalytics.dailyStats).reduce((sum, day) => sum + day.doctors, 0) : 0}</p>
+                    <p className="text-sm text-teal-800">Doctors</p>
+                  </div>
+                  <div className="text-center p-4 bg-pink-50 rounded-lg">
+                    <p className="text-2xl font-bold text-pink-600">{userAnalytics.dailyStats ? Object.values(userAnalytics.dailyStats).reduce((sum, day) => sum + day.admins, 0) : 0}</p>
+                    <p className="text-sm text-pink-800">Admins</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Posts Tab */}
+        {activeTab === 'posts' && (
+          <div className="space-y-6">
+
+            {/* Posts Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <FileText className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Posts</p>
+                    <p className="text-2xl font-bold text-gray-900">{allPosts.length}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Published</p>
+                    <p className="text-2xl font-bold text-gray-900">{allPosts.filter(post => post.isActive).length}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-yellow-100 rounded-lg">
+                    <Clock className="h-6 w-6 text-yellow-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Draft</p>
+                    <p className="text-2xl font-bold text-gray-900">{allPosts.filter(post => !post.isActive).length}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <TrendingUp className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">This Week</p>
+                    <p className="text-2xl font-bold text-gray-900">{allPosts.filter(post => {
+                      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                      return new Date(post.createdAt) >= weekAgo;
+                    }).length}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Posts Management */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900">Posts Management</h3>
+                <div className="flex items-center space-x-3">
+                  <select
+                    value={filterRole}
+                    onChange={(e) => setFilterRole(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Search posts..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Posts List */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Post</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-xs font-medium text-gray-500 uppercase tracking-wider">Author</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {allPosts
+                      .filter(post => {
+                        const matchesSearch = post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                            post.content?.toLowerCase().includes(searchTerm.toLowerCase());
+                        const matchesStatus = filterRole === 'all' || 
+                          (filterRole === 'published' && post.isActive) ||
+                          (filterRole === 'draft' && !post.isActive);
+                        return matchesSearch && matchesStatus;
+                      })
+                      .map((post) => (
+                        <tr key={post._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                <FileText className="h-5 w-5 text-emerald-600" />
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{post.title}</div>
+                                <div className="text-sm text-gray-500">
+                                  {post.content.length > 100 ? `${post.content.substring(0, 100)}...` : post.content}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{post.author?.name || 'Unknown'}</div>
+                            <div className="text-sm text-gray-500">{post.author?.email || 'N/A'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              post.isActive 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {post.isActive ? 'Published' : 'Draft'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {post.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button className="text-emerald-600 hover:text-emerald-900 mr-3">
+                              View
+                            </button>
+                            <button className="text-blue-600 hover:text-blue-900 mr-3">
+                              Edit
+                            </button>
+                            <button className="text-red-600 hover:text-red-900">
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Empty State */}
+              <div className="text-center py-8">
+                <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No posts found</h3>
+                <p className="text-gray-600">
+                  {searchTerm || filterRole !== 'all' 
+                    ? 'Try adjusting your search or filter criteria.' 
+                    : 'No posts have been created yet.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Profile View Modal */}
+        {showProfileModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">User Profile</h2>
+                <button
+                  onClick={() => {
+                    setShowProfileModal(false);
+                    setSelectedUser(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* User Header */}
+              <div className="flex items-center space-x-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center">
+                  <span className="text-3xl font-bold text-emerald-600">
+                    {selectedUser.name?.charAt(0) || 'U'}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">{selectedUser.name || 'Unknown'}</h3>
+                  <p className="text-gray-600">{selectedUser.email}</p>
+                  <div className="flex items-center space-x-2 mt-2">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      selectedUser.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                      selectedUser.role === 'doctor' ? 'bg-blue-100 text-blue-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {selectedUser.role}
                     </span>
+                    {selectedUser.role === 'doctor' && (
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        selectedUser.verificationStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                        selectedUser.verificationStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedUser.verificationStatus || 'pending'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* User Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">Basic Information</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Full Name:</span>
+                        <span className="font-medium">{selectedUser.name || 'Not provided'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Email:</span>
+                        <span className="font-medium">{selectedUser.email}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Role:</span>
+                        <span className="font-medium capitalize">{selectedUser.role}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Joined:</span>
+                        <span className="font-medium">
+                          {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  <h4 className="text-sm font-medium text-gray-900">System Alerts</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg border border-green-200">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm text-green-700">All systems operational</span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                      <span className="text-sm text-yellow-700">Storage usage approaching limit</span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span className="text-sm text-blue-700">Scheduled maintenance in 2 days</span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                      <span className="text-sm text-purple-700">New security update available</span>
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">Account Status</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Status:</span>
+                        <span className={`font-medium ${
+                          selectedUser.role === 'doctor' ? 
+                            (selectedUser.verificationStatus === 'approved' ? 'text-green-600' :
+                             selectedUser.verificationStatus === 'pending' ? 'text-yellow-600' :
+                             'text-red-600') :
+                          'text-green-600'
+                        }`}>
+                          {selectedUser.role === 'doctor' ? 
+                            (selectedUser.verificationStatus === 'approved' ? 'Verified' :
+                             selectedUser.verificationStatus === 'pending' ? 'Pending Verification' :
+                             'Rejected') :
+                            'Active'
+                          }
+                        </span>
+                      </div>
+                      {selectedUser.role === 'doctor' && (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Active:</span>
+                            <span className={`font-medium ${selectedUser.isActive ? 'text-green-600' : 'text-red-600'}`}>
+                              {selectedUser.isActive ? 'Yes' : 'No'}
+                            </span>
+                          </div>
+                          {selectedUser.verificationDate && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Verified On:</span>
+                              <span className="font-medium">
+                                {new Date(selectedUser.verificationDate).toLocaleDateString()}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Doctor Specific Information */}
+              {selectedUser.role === 'doctor' && (
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-gray-900 mb-3">Professional Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Specialization:</span>
+                      <p className="font-medium">{selectedUser.specialization || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Experience:</span>
+                      <p className="font-medium">{selectedUser.experience ? `${selectedUser.experience} years` : 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Qualifications:</span>
+                      <p className="font-medium">{selectedUser.qualifications || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">License Number:</span>
+                      <p className="font-medium">{selectedUser.licenseNumber || 'Not specified'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-3 pt-4 border-t">
+                <button
+                  onClick={() => {
+                    setShowProfileModal(false);
+                    setSelectedUser(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Close
+                </button>
+                {selectedUser.role === 'doctor' && selectedUser.verificationStatus === 'pending' && (
+                  <button
+                    onClick={() => {
+                      handleUserAction(selectedUser._id, 'verify');
+                      setShowProfileModal(false);
+                      setSelectedUser(null);
+                    }}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+                  >
+                    Verify Doctor
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && userToDelete && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-red-600">Delete User</h2>
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setUserToDelete(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-center space-x-4 mb-4">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                    <span className="text-2xl font-bold text-red-600">
+                      {userToDelete.name?.charAt(0) || 'U'}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">{userToDelete.name || 'Unknown'}</h3>
+                    <p className="text-gray-600">{userToDelete.email}</p>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      userToDelete.role === 'doctor' ? 'bg-blue-100 text-blue-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {userToDelete.role}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="text-sm text-red-700">
+                      <p className="font-medium">This action cannot be undone.</p>
+                      <p className="mt-1">
+                        This will permanently delete the {userToDelete.role} and all associated data including:
+                        {userToDelete.role === 'doctor' ? ' posts, sessions, and profile information.' : ' sessions and profile information.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setUserToDelete(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteUser(userToDelete._id)}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                >
+                  Delete User
+                </button>
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, MessageCircle, CheckCircle, XCircle, User, Eye } from 'lucide-react';
+import { Calendar, Clock, MessageCircle, CheckCircle, XCircle, User, Eye, AlertTriangle, Star } from 'lucide-react';
 import axios from 'axios';
 
 const Sessions = () => {
@@ -11,6 +11,11 @@ const Sessions = () => {
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState(null);
   const [doctorResponse, setDoctorResponse] = useState('');
+  const [endSessionData, setEndSessionData] = useState({
+    feedback: '',
+    rating: 5,
+    notes: ''
+  });
 
   useEffect(() => {
     fetchSessions();
@@ -47,6 +52,30 @@ const Sessions = () => {
     }
   };
 
+  const handleEndSession = async (sessionId) => {
+    try {
+      await axios.post(`/api/sessions/${sessionId}/end`, endSessionData);
+
+      setSessions(sessions.map(session =>
+        session._id === sessionId 
+          ? { 
+              ...session, 
+              status: 'completed', 
+              sessionEndedAt: new Date(),
+              finalFeedback: endSessionData.feedback,
+              sessionRating: endSessionData.rating,
+              sessionNotes: endSessionData.notes
+            }
+          : session
+      ));
+
+      setSelectedSession(null);
+      setEndSessionData({ feedback: '', rating: 5, notes: '' });
+    } catch (error) {
+      console.error('Failed to end session:', error);
+    }
+  };
+
   const openChat = (session) => {
     if (session.status === 'approved' && session.chatRoom) {
       navigate(`/chat/${session._id}`);
@@ -63,6 +92,7 @@ const Sessions = () => {
       case 'pending': return 'text-yellow-600 bg-yellow-100';
       case 'rejected': return 'text-red-600 bg-red-100';
       case 'completed': return 'text-blue-600 bg-blue-100';
+      case 'expired': return 'text-orange-600 bg-orange-100';
       default: return 'text-gray-600 bg-gray-100';
     }
   };
@@ -73,8 +103,23 @@ const Sessions = () => {
       case 'pending': return <Clock className="h-4 w-4" />;
       case 'rejected': return <XCircle className="h-4 w-4" />;
       case 'completed': return <CheckCircle className="h-4 w-4" />;
+      case 'expired': return <AlertTriangle className="h-4 w-4" />;
       default: return <Clock className="h-4 w-4" />;
     }
+  };
+
+  const formatDuration = (minutes) => {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  };
+
+  const isSessionExpired = (session) => {
+    if (session.status === 'approved' && session.endTime) {
+      return new Date() > new Date(session.endTime);
+    }
+    return false;
   };
 
   if (loading) {
@@ -117,6 +162,12 @@ const Sessions = () => {
                         {getStatusIcon(session.status)}
                         <span className="ml-1 capitalize">{session.status}</span>
                       </span>
+                      {isSessionExpired(session) && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-orange-600 bg-orange-100">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Expired
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-4 mb-4">
@@ -136,6 +187,20 @@ const Sessions = () => {
                           {new Date(session.preferredDateTime).toLocaleString()}
                         </span>
                       </div>
+                      <div className="flex items-center text-gray-600">
+                        <Clock className="h-4 w-4 mr-2" />
+                        <span className="text-sm">
+                          Duration: {formatDuration(session.duration || 60)}
+                        </span>
+                      </div>
+                      {session.endTime && (
+                        <div className="flex items-center text-gray-600">
+                          <Clock className="h-4 w-4 mr-2" />
+                          <span className="text-sm">
+                            Ends: {new Date(session.endTime).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <p className="text-gray-700 mb-4">{session.description}</p>
@@ -144,6 +209,33 @@ const Sessions = () => {
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                         <h4 className="font-medium text-blue-800 mb-2">Doctor's Response:</h4>
                         <p className="text-blue-700 text-sm">{session.doctorResponse}</p>
+                      </div>
+                    )}
+
+                    {session.status === 'completed' && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                        <h4 className="font-medium text-green-800 mb-2">Session Feedback:</h4>
+                        {session.sessionRating && (
+                          <div className="flex items-center mb-2">
+                            <span className="text-sm text-green-700 mr-2">Rating:</span>
+                            <div className="flex items-center">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`h-4 w-4 ${
+                                    star <= session.sessionRating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {session.finalFeedback && (
+                          <p className="text-green-700 text-sm mb-2">{session.finalFeedback}</p>
+                        )}
+                        {session.sessionNotes && (
+                          <p className="text-green-700 text-sm">{session.sessionNotes}</p>
+                        )}
                       </div>
                     )}
 
@@ -167,6 +259,15 @@ const Sessions = () => {
                             </button>
                           )}
                         </>
+                      )}
+
+                      {user.role === 'doctor' && session.status === 'approved' && (
+                        <button
+                          onClick={() => setSelectedSession(session)}
+                          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                        >
+                          End Session
+                        </button>
                       )}
 
                       {session.status === 'approved' && (
@@ -198,7 +299,7 @@ const Sessions = () => {
         </div>
 
         {/* Doctor Response Modal */}
-        {selectedSession && (
+        {selectedSession && selectedSession.status === 'pending' && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl p-6 w-full max-w-md">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">
@@ -243,6 +344,87 @@ const Sessions = () => {
                   className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
                 >
                   Accept
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* End Session Modal */}
+        {selectedSession && selectedSession.status === 'approved' && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                End Session
+              </h2>
+              
+              <div className="mb-4">
+                <h3 className="font-medium text-gray-900">{selectedSession.title}</h3>
+                <p className="text-sm text-gray-600">
+                  with {selectedSession.isAnonymous ? selectedSession.anonymousName : selectedSession.student?.name}
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Final Feedback for Student
+                </label>
+                <textarea
+                  rows="3"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Provide final feedback and recommendations..."
+                  value={endSessionData.feedback}
+                  onChange={(e) => setEndSessionData({...endSessionData, feedback: e.target.value})}
+                ></textarea>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Session Rating (1-5)
+                </label>
+                <div className="flex items-center space-x-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setEndSessionData({...endSessionData, rating: star})}
+                      className="focus:outline-none"
+                    >
+                      <Star
+                        className={`h-6 w-6 ${
+                          star <= endSessionData.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Session Notes (Optional)
+                </label>
+                <textarea
+                  rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Add any additional notes..."
+                  value={endSessionData.notes}
+                  onChange={(e) => setEndSessionData({...endSessionData, notes: e.target.value})}
+                ></textarea>
+              </div>
+
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => setSelectedSession(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleEndSession(selectedSession._id)}
+                  className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                >
+                  End Session
                 </button>
               </div>
             </div>

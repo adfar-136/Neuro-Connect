@@ -115,10 +115,50 @@ const connectDB = async () => {
   try {
     await mongoose.connect("mongodb://localhost:27017/neuroo");
     console.log('MongoDB connected successfully');
+    
+    // Start background job for session expiration
+    startSessionExpirationJob();
   } catch (error) {
     console.error('MongoDB connection error:', error);
     process.exit(1);
   }
+};
+
+// Background job to automatically expire sessions
+const startSessionExpirationJob = () => {
+  // Run every 5 minutes
+  setInterval(async () => {
+    try {
+      const Session = (await import('./models/Session.js')).default;
+      
+      const expiredSessions = await Session.find({
+        status: 'approved',
+        endTime: { $lt: new Date() }
+      });
+
+      if (expiredSessions.length > 0) {
+        console.log(`Auto-expiring ${expiredSessions.length} sessions`);
+        
+        for (const session of expiredSessions) {
+          session.status = 'expired';
+          session.sessionEndedAt = new Date();
+          await session.save();
+        }
+        
+        // Notify connected clients about expired sessions
+        expiredSessions.forEach(session => {
+          io.to(session.chatRoom).emit('session-expired', {
+            sessionId: session._id,
+            message: 'Session has expired automatically'
+          });
+        });
+      }
+    } catch (error) {
+      console.error('Error in session expiration job:', error);
+    }
+  }, 5 * 60 * 1000); // 5 minutes
+  
+  console.log('Session expiration job started');
 };
 
 const PORT = 8000;
