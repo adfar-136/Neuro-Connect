@@ -4,7 +4,6 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
-// Rate limiting removed
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -38,8 +37,7 @@ const allowedOrigins = [
   'http://localhost:5177',
   'http://localhost:5178',
   'http://localhost:5179',
-  'http://localhost:5180',
-  'https://iustneuro.netlify.app'
+  'http://localhost:5180'
 ];
 
 const io = new Server(server, {
@@ -49,8 +47,7 @@ const io = new Server(server, {
   }
 });
 
-// Rate limiting removed - no more 429 errors
-// Middleware
+
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -108,7 +105,7 @@ app.locals.broadcastMessage = broadcastMessage;
 // MongoDB connection
 const connectDB = async () => {
   try {
-    await mongoose.connect("mongodb+srv://midreesbhat_db:test@cluster0.c0lvlbi.mongodb.net/neuro");
+    await mongoose.connect("mongodb://localhost:27017/neuroo");
     console.log('MongoDB connected successfully');
     
     // Start background job for session expiration

@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, MessageCircle, CheckCircle, XCircle, User, Eye, AlertTriangle, Star } from 'lucide-react';
 import axios from 'axios';
-import { buildApiUrl } from '../config/api';
 
 const Sessions = () => {
   const { user } = useAuth();
@@ -24,7 +23,7 @@ const Sessions = () => {
 
   const fetchSessions = async () => {
     try {
-      const response = await axios.get(buildApiUrl('api/sessions/my-sessions'));
+      const response = await axios.get('/api/sessions/my-sessions');
       setSessions(response.data);
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
@@ -35,7 +34,7 @@ const Sessions = () => {
 
   const handleSessionResponse = async (sessionId, status) => {
     try {
-              await axios.patch(buildApiUrl(`api/sessions/${sessionId}/status`), {
+      await axios.patch(`/api/sessions/${sessionId}/status`, {
         status,
         doctorResponse
       });
@@ -55,7 +54,7 @@ const Sessions = () => {
 
   const handleEndSession = async (sessionId) => {
     try {
-              await axios.post(buildApiUrl(`api/sessions/${sessionId}/end`), endSessionData);
+      await axios.post(`/api/sessions/${sessionId}/end`, endSessionData);
 
       setSessions(sessions.map(session =>
         session._id === sessionId 

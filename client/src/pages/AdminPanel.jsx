@@ -38,11 +38,11 @@ import {
   X
 } from 'lucide-react';
 import axios from 'axios';
-import { buildApiUrl } from '../config/api';
 
 const AdminPanel = () => {
   const [stats, setStats] = useState({});
-
+  const [pendingDoctors, setPendingDoctors] = useState([]);
+  const [allDoctors, setAllDoctors] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [allPosts, setAllPosts] = useState([]);
   const [doctorAnalytics, setDoctorAnalytics] = useState([]);
@@ -57,9 +57,6 @@ const AdminPanel = () => {
   const [analyticsPeriod, setAnalyticsPeriod] = useState('7d');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [userToDelete, setUserToDelete] = useState(null);
-  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   useEffect(() => {
     fetchAdminData();
@@ -69,22 +66,28 @@ const AdminPanel = () => {
     try {
       const [
         statsResponse, 
+        pendingResponse, 
+        doctorsResponse, 
         usersResponse,
         postsResponse,
         doctorAnalyticsResponse,
         sessionAnalyticsResponse,
         userAnalyticsResponse
       ] = await Promise.all([
-        axios.get(buildApiUrl('api/admin/stats')),
-        axios.get(buildApiUrl('api/admin/users')),
-        axios.get(buildApiUrl('api/admin/posts')),
-        axios.get(buildApiUrl('api/admin/analytics/doctors')),
-        axios.get(buildApiUrl(`api/admin/analytics/sessions?period=${analyticsPeriod}`)),
-        axios.get(buildApiUrl(`api/admin/analytics/users?period=${analyticsPeriod}`))
+        axios.get('/api/admin/stats'),
+        axios.get('/api/admin/doctors/pending'),
+        axios.get('/api/admin/doctors'),
+        axios.get('/api/admin/users'),
+        axios.get('/api/admin/posts'),
+        axios.get('/api/admin/analytics/doctors'),
+        axios.get(`/api/admin/analytics/sessions?period=${analyticsPeriod}`),
+        axios.get(`/api/admin/analytics/users?period=${analyticsPeriod}`)
       ]);
 
       // Ensure all data is properly formatted and safe for rendering
       setStats(statsResponse.data || {});
+      setPendingDoctors(pendingResponse.data || []);
+      setAllDoctors(doctorsResponse.data || []);
       setAllUsers(usersResponse.data || []);
       setAllPosts(postsResponse.data?.posts || []);
       setDoctorAnalytics(doctorAnalyticsResponse.data || []);
@@ -136,17 +139,12 @@ const AdminPanel = () => {
     }
   };
 
-
-
-  const handleDeleteUser = async (userId) => {
+  const handleVerifyDoctor = async (doctorId, status) => {
     try {
-              await axios.delete(buildApiUrl(`api/admin/users/${userId}`));
-      setShowDeleteModal(false);
-      setUserToDelete(null);
+      await axios.patch(`/api/admin/doctors/${doctorId}/verify`, { status });
       fetchAdminData(); // Refresh data
     } catch (error) {
-      console.error('Error deleting user:', error);
-      alert('Failed to delete user. Please try again.');
+      console.error('Error verifying doctor:', error);
     }
   };
 
@@ -155,24 +153,19 @@ const AdminPanel = () => {
       switch (action) {
         case 'view':
           // Find the user and show profile modal
-          const user = allUsers.find(u => u._id === userId);
+          const user = allUsers.find(u => u._id === userId) || allDoctors.find(d => d._id === userId);
           if (user) {
             setSelectedUser(user);
             setShowProfileModal(true);
           }
           break;
-
-        case 'delete':
-          // Show delete confirmation modal
-          const userToDelete = allUsers.find(u => u._id === userId);
-          if (userToDelete) {
-            setUserToDelete(userToDelete);
-            setShowDeleteModal(true);
-          }
+        case 'edit':
+          // Show edit modal
+          console.log('Edit user:', userId);
           break;
         case 'verify':
           // Verify doctor
-          await axios.patch(buildApiUrl(`api/admin/doctors/${userId}/verify`), { status: 'approved' });
+          await axios.patch(`/api/admin/doctors/${userId}/verify`, { status: 'approved' });
           fetchAdminData(); // Refresh data
           break;
         default:
@@ -225,6 +218,7 @@ const AdminPanel = () => {
           <nav className="flex space-x-8">
             {[
               { id: 'overview', label: 'Overview', icon: BarChart3 },
+              { id: 'doctors', label: 'Doctors', icon: UserCheck },
               { id: 'users', label: 'Users', icon: Users },
               { id: 'analytics', label: 'Analytics', icon: TrendingUp },
               { id: 'posts', label: 'Posts', icon: FileText }
@@ -339,7 +333,87 @@ const AdminPanel = () => {
           </div>
         )}
 
+        {/* Doctors Tab */}
+        {activeTab === 'doctors' && (
+          <div className="space-y-6">
+            {/* Pending Doctors */}
+            {pendingDoctors.length > 0 && (
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Pending Verification</h3>
+                <div className="space-y-4">
+                  {pendingDoctors.map((doctor) => (
+                    <div key={doctor._id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                      <div>
+                        <h4 className="font-medium text-gray-900">{doctor.name}</h4>
+                        <p className="text-sm text-gray-600">{doctor.email}</p>
+                        <p className="text-sm text-gray-600">{doctor.specialization}</p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleVerifyDoctor(doctor._id, 'approved')}
+                          className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleVerifyDoctor(doctor._id, 'rejected')}
+                          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
+            {/* All Doctors */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">All Doctors</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Specialization</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sessions</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {allDoctors.map((doctor) => (
+                      <tr key={doctor._id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{doctor.name}</div>
+                            <div className="text-sm text-gray-500">{doctor.email}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {doctor.specialization}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(doctor.verificationStatus)}`}>
+                            {doctor.verificationStatus}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {doctorAnalytics.find(d => d.id === doctor._id)?.stats.totalSessions || 0}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button className="text-emerald-600 hover:text-emerald-900 mr-3">View</button>
+                          <button className="text-blue-600 hover:text-blue-900">Edit</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Users Tab */}
         {activeTab === 'users' && (
@@ -353,7 +427,7 @@ const AdminPanel = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Total Users</p>
-                    <p className="text-2xl font-bold text-gray-900">{allUsers.filter(u => u.role !== 'admin').length}</p>
+                    <p className="text-2xl font-bold text-gray-900">{allUsers.length}</p>
                   </div>
                 </div>
               </div>
@@ -382,7 +456,17 @@ const AdminPanel = () => {
                 </div>
               </div>
               
-
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Shield className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Admins</p>
+                    <p className="text-2xl font-bold text-gray-900">{allUsers.filter(u => u.role === 'admin').length}</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Search and Filter */}
@@ -409,6 +493,7 @@ const AdminPanel = () => {
                     <option value="all">All Roles</option>
                     <option value="student">Students</option>
                     <option value="doctor">Doctors</option>
+                    <option value="admin">Admins</option>
                   </select>
 
                 </div>
@@ -431,7 +516,6 @@ const AdminPanel = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {allUsers
-                      .filter(user => user.role !== 'admin') // Exclude admin users
                       .filter(user => {
                         const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                             user.email?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -483,21 +567,20 @@ const AdminPanel = () => {
                             >
                               View
                             </button>
-
+                            <button 
+                              onClick={() => handleUserAction(user._id, 'edit')}
+                              className="text-blue-600 hover:text-blue-900 mr-3"
+                            >
+                              Edit
+                            </button>
                             {user.role === 'doctor' && user.verificationStatus === 'pending' && (
                               <button 
                                 onClick={() => handleUserAction(user._id, 'verify')}
-                                className="text-orange-600 hover:text-orange-900 mr-3"
+                                className="text-orange-600 hover:text-orange-900"
                               >
                                 Verify
                               </button>
                             )}
-                            <button 
-                              onClick={() => handleUserAction(user._id, 'delete')}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Delete
-                            </button>
                           </td>
                         </tr>
                       ))}
@@ -506,14 +589,12 @@ const AdminPanel = () => {
               </div>
               
               {/* Empty State */}
-              {allUsers
-                .filter(user => user.role !== 'admin') // Exclude admin users
-                .filter(user => {
-                  const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
-                  const matchesRole = filterRole === 'all' || user.role === filterRole;
-                  return matchesSearch && matchesRole;
-                }).length === 0 && (
+              {allUsers.filter(user => {
+                const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                    user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+                const matchesRole = filterRole === 'all' || user.role === filterRole;
+                return matchesSearch && matchesRole;
+              }).length === 0 && (
                 <div className="text-center py-8">
                   <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
@@ -535,97 +616,15 @@ const AdminPanel = () => {
             <div className="bg-white rounded-xl shadow-md p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900">Analytics Period</h3>
-                <div className="flex items-center space-x-4">
-                  <select
-                    value={analyticsPeriod}
-                    onChange={(e) => setAnalyticsPeriod(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  >
-                    <option value="7d">Last 7 Days</option>
-                    <option value="30d">Last 30 Days</option>
-                    <option value="90d">Last 90 Days</option>
-                  </select>
-                  <button
-                    onClick={async () => {
-                      if (isExportingPDF) return;
-                      
-                      try {
-                        setIsExportingPDF(true);
-                        const token = localStorage.getItem('token');
-                        if (!token) {
-                          alert('Please log in to export PDF');
-                          return;
-                        }
-
-                        console.log('Starting PDF export...');
-                        const response = await fetch(buildApiUrl('api/admin/analytics/doctors/pdf'), {
-                          method: 'GET',
-                          headers: {
-                            'Authorization': `Bearer ${token}`,
-                          },
-                        });
-
-                        console.log('Response status:', response.status);
-                        console.log('Response headers:', response.headers);
-
-                        if (response.ok) {
-                          const blob = await response.blob();
-                          console.log('PDF blob size:', blob.size);
-                          
-                          if (blob.size === 0) {
-                            alert('Generated PDF is empty. Please try again.');
-                            return;
-                          }
-
-                          const url = window.URL.createObjectURL(blob);
-                          const link = document.createElement('a');
-                          link.href = url;
-                          link.download = `doctor-analytics-${new Date().toISOString().split('T')[0]}.pdf`;
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
-                          window.URL.revokeObjectURL(url);
-                          
-                          console.log('PDF downloaded successfully');
-                        } else {
-                          const errorText = await response.text();
-                          console.error('Failed to generate PDF:', response.status, errorText);
-                          
-                          if (response.status === 401) {
-                            alert('Authentication failed. Please log in again.');
-                          } else if (response.status === 403) {
-                            alert('Access denied. Admin privileges required.');
-                          } else {
-                            alert(`Failed to generate PDF (${response.status}). Please try again.`);
-                          }
-                        }
-                      } catch (error) {
-                        console.error('Error generating PDF:', error);
-                        alert('Network error. Please check your connection and try again.');
-                      } finally {
-                        setIsExportingPDF(false);
-                      }
-                    }}
-                    disabled={isExportingPDF}
-                    className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
-                      isExportingPDF 
-                        ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-emerald-500 hover:bg-emerald-600'
-                    } text-white`}
-                  >
-                    {isExportingPDF ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Generating PDF...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        <span>Export PDF</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+                <select
+                  value={analyticsPeriod}
+                  onChange={(e) => setAnalyticsPeriod(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                >
+                  <option value="7d">Last 7 Days</option>
+                  <option value="30d">Last 30 Days</option>
+                  <option value="90d">Last 90 Days</option>
+                </select>
               </div>
 
               {/* Doctor Performance */}
@@ -1029,81 +1028,6 @@ const AdminPanel = () => {
                     Verify Doctor
                   </button>
                 )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Delete Confirmation Modal */}
-        {showDeleteModal && userToDelete && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-red-600">Delete User</h2>
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setUserToDelete(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-
-              <div className="mb-6">
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-                    <span className="text-2xl font-bold text-red-600">
-                      {userToDelete.name?.charAt(0) || 'U'}
-                    </span>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">{userToDelete.name || 'Unknown'}</h3>
-                    <p className="text-gray-600">{userToDelete.email}</p>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      userToDelete.role === 'doctor' ? 'bg-blue-100 text-blue-800' :
-                      'bg-green-100 text-green-800'
-                    }`}>
-                      {userToDelete.role}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="text-sm text-red-700">
-                      <p className="font-medium">This action cannot be undone.</p>
-                      <p className="mt-1">
-                        This will permanently delete the {userToDelete.role} and all associated data including:
-                        {userToDelete.role === 'doctor' ? ' posts, sessions, and profile information.' : ' sessions and profile information.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setUserToDelete(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDeleteUser(userToDelete._id)}
-                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
-                >
-                  Delete User
-                </button>
               </div>
             </div>
           </div>

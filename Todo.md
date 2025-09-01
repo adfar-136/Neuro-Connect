@@ -85,16 +85,6 @@
 - [x] Implement profile viewing functionality for doctors and users in admin panel
 - [x] Replace System tab with Posts tab for real content management
 - [x] Implement automatic admin redirection to admin panel on login and navigation
-- [x] Remove Doctors tab (doctors now shown in Users tab) and filter out admin users from Users tab
-- [x] Implement user deletion functionality with confirmation modal and database cleanup
-- [x] Streamline user actions to only View and Delete (removed Edit option)
-- [x] Implement PDF export functionality for doctor analytics with comprehensive reporting
-- [x] Update frontend configuration to use deployed backend API (https://neuroconnectserver.onrender.com)
-- [x] Fix all hardcoded localhost:8000 URLs in frontend components
-- [x] Verify deployed backend API endpoints are working correctly
-- [x] Remove Vite proxy configuration and implement direct API calls
-- [x] Create centralized API configuration with buildApiUrl helper function
-- [x] Update all components to use direct backend API calls instead of proxy
 
 ## Current Status 🟢
 

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Heart, MessageCircle, Plus, Upload, X } from 'lucide-react';
 import axios from 'axios';
-import { buildApiUrl } from '../config/api';
 
 const Posts = () => {
   const { user } = useAuth();
@@ -23,7 +22,7 @@ const Posts = () => {
 
   const fetchPosts = async () => {
     try {
-      const response = await axios.get(buildApiUrl('api/posts'));
+      const response = await axios.get('/api/posts');
       setPosts(response.data);
     } catch (error) {
       console.error('Failed to fetch posts:', error);
@@ -43,7 +42,7 @@ const Posts = () => {
         formData.append('image', newPost.image);
       }
 
-              const response = await axios.post(buildApiUrl('api/posts'), formData, {
+      const response = await axios.post('/api/posts', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
@@ -57,7 +56,7 @@ const Posts = () => {
 
   const handleLikePost = async (postId) => {
     try {
-              const response = await axios.post(buildApiUrl(`api/posts/${postId}/like`));
+      const response = await axios.post(`/api/posts/${postId}/like`);
       setPosts(posts.map(post => 
         post._id === postId ? response.data : post
       ));
@@ -71,7 +70,7 @@ const Posts = () => {
     if (!content?.trim()) return;
 
     try {
-              const response = await axios.post(buildApiUrl(`api/posts/${postId}/comment`), { content });
+      const response = await axios.post(`/api/posts/${postId}/comment`, { content });
       setPosts(posts.map(post => 
         post._id === postId ? response.data : post
       ));
@@ -245,7 +244,7 @@ const Posts = () => {
                   <p className="text-gray-700 leading-relaxed">{post.content}</p>
                   {post.image && (
                     <img
-                      src={`https://neuroconnectserver.onrender.com${post.image}`}
+                      src={`http://localhost:8000${post.image}`}
                       alt="Post"
                       className="mt-4 w-full h-64 object-cover rounded-lg"
                     />

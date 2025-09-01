@@ -33,7 +33,7 @@ const sessionSchema = new mongoose.Schema({
   },
   duration: {
     type: Number, // Duration in minutes
-    default: 60,
+    default: 1,
     min: 1,
     max: 180
   },
@@ -47,7 +47,8 @@ const sessionSchema = new mongoose.Schema({
     default: 'pending'
   },
   chatRoom: {
-    type: String
+    type: String,
+    unique: true
   },
   notes: {
     type: String,

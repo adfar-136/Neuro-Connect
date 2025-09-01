@@ -14,7 +14,6 @@ import {
   FileText
 } from 'lucide-react';
 import axios from 'axios';
-import { buildApiUrl } from '../config/api';
 
 const StudentProfile = () => {
   const { studentId } = useParams();
@@ -34,7 +33,7 @@ const StudentProfile = () => {
 
   const fetchStudentData = async () => {
     try {
-              const response = await axios.get(buildApiUrl(`api/users/${studentId}`));
+      const response = await axios.get(`/api/users/${studentId}`);
       setStudent(response.data);
     } catch (error) {
       console.error('Failed to fetch student data:', error);

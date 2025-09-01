@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { Send, Paperclip, Image, ArrowLeft, User, MessageCircle } from 'lucide-react';
 import io from 'socket.io-client';
 import axios from 'axios';
-import { buildApiUrl, SOCKET_URL } from '../config/api';
 
 const Chat = () => {
   const { sessionId } = useParams();
@@ -70,12 +69,7 @@ const Chat = () => {
     console.log('Current user:', user);
     console.log('User ID:', user.id, 'User _id:', user._id);
 
-    // Close existing socket if it exists
-    if (socket) {
-      socket.close();
-    }
-
-    const newSocket = io(SOCKET_URL, {
+    const newSocket = io('http://localhost:8000', {
       auth: { token },
       transports: ['websocket', 'polling']
     });
@@ -116,36 +110,28 @@ const Chat = () => {
           type: message.type,
           filePath: message.filePath,
           fileName: message.fileName,
-          fullUrl: `https://neuroconnectserver.onrender.com${message.filePath}`
+          fullUrl: `http://localhost:8000${message.filePath}`
         });
       }
       
-      // Prevent duplicate messages by checking multiple criteria
+      // Check if this message already exists to prevent duplicates
       setMessages(prev => {
-        // Check if message already exists by ID
-        if (prev.some(msg => msg._id === message._id)) {
-          console.log('Message already exists by ID, skipping:', message._id);
-          return prev;
-        }
-        
-        // Check if this is a replacement for a temporary message
-        const tempMessageIndex = prev.findIndex(msg => 
-          msg.isTemp && 
-          msg.content === message.content && 
-          msg.sender._id === message.sender._id &&
-          Math.abs(new Date(msg.createdAt).getTime() - new Date(message.createdAt).getTime()) < 10000 // Within 10 seconds
+        const messageExists = prev.some(msg => 
+          msg._id === message._id || 
+          (msg.isTemp && msg.content === message.content && msg.sender._id === message.sender._id)
         );
         
-        if (tempMessageIndex !== -1) {
-          console.log('Replacing temporary message with real message');
-          const newMessages = [...prev];
-          newMessages[tempMessageIndex] = message;
-          return newMessages;
+        if (messageExists) {
+          // Replace temp message with real message or skip if already exists
+          return prev.map(msg => 
+            msg.isTemp && msg.content === message.content && msg.sender._id === message.sender._id 
+              ? message 
+              : msg
+          );
+        } else {
+          // Add new message
+          return [...prev, message];
         }
-        
-        // Add new message
-        console.log('Adding new message to chat');
-        return [...prev, message];
       });
     });
 
@@ -180,16 +166,6 @@ const Chat = () => {
 
     return () => {
       if (newSocket) {
-        // Remove all event listeners before closing
-        newSocket.off('connect');
-        newSocket.off('connect_error');
-        newSocket.off('disconnect');
-        newSocket.off('joined-session');
-        newSocket.off('new-message');
-        newSocket.off('message-sent');
-        newSocket.off('user-typing');
-        newSocket.off('user-stop-typing');
-        newSocket.off('error');
         newSocket.close();
       }
     };
@@ -202,7 +178,7 @@ const Chat = () => {
   const fetchSessionData = async () => {
     try {
       // Fetch session details
-              const sessionResponse = await axios.get(buildApiUrl('api/sessions/my-sessions'));
+      const sessionResponse = await axios.get('/api/sessions/my-sessions');
       const currentSession = sessionResponse.data.find(s => s._id === sessionId);
       
       if (!currentSession) {
@@ -214,14 +190,8 @@ const Chat = () => {
       setSession(currentSession);
 
       // Fetch messages
-              const messagesResponse = await axios.get(buildApiUrl(`api/chat/${sessionId}`));
-      
-      // Remove any duplicate messages from the initial load
-      const uniqueMessages = messagesResponse.data.filter((message, index, self) => 
-        index === self.findIndex(m => m._id === message._id)
-      );
-      
-      setMessages(uniqueMessages);
+      const messagesResponse = await axios.get(`/api/chat/${sessionId}`);
+      setMessages(messagesResponse.data);
     } catch (error) {
       console.error('Failed to fetch chat data:', error);
       setError('Failed to load chat data');
@@ -243,16 +213,12 @@ const Chat = () => {
       return;
     }
 
-    console.log('📤 Sending message:', newMessage.trim());
-    console.log('🔌 Socket connected:', socketConnected);
-    console.log('📡 Current messages count:', messages.length);
-
     const messageContent = newMessage.trim();
     setNewMessage('');
 
     // Create a temporary message with a unique ID for optimistic update
     const tempMessage = {
-      _id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      _id: `temp_${Date.now()}`,
       content: messageContent,
       sender: { _id: user.id, name: user.name, profileImage: user.profileImage },
       type: 'text',
@@ -264,10 +230,9 @@ const Chat = () => {
     setMessages(prev => [...prev, tempMessage]);
 
     // Set a timeout to remove the temporary message if it's not replaced
-    const tempMessageId = tempMessage._id;
     setTimeout(() => {
-      setMessages(prev => prev.filter(msg => msg._id !== tempMessageId));
-    }, 10000); // 10 seconds timeout (increased for better reliability)
+      setMessages(prev => prev.filter(msg => msg._id !== tempMessage._id));
+    }, 5000); // 5 seconds timeout
 
     socket.emit('send-message', {
       sessionId,
@@ -301,7 +266,7 @@ const Chat = () => {
       formData.append('type', type);
       formData.append('content', `Shared ${type === 'image' ? 'image' : 'file'}: ${file.name}`);
 
-              const response = await axios.post(buildApiUrl(`api/chat/${sessionId}/message`), formData, {
+      const response = await axios.post(`/api/chat/${sessionId}/message`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
@@ -472,7 +437,7 @@ const Chat = () => {
                     ) : message.type === 'image' ? (
                       <div className="space-y-2">
                         <img
-                          src={`https://neuroconnectserver.onrender.com${message.filePath}`}
+                          src={`http://localhost:8000${message.filePath}`}
                           alt="Shared image"
                           className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
                           onClick={() => {
@@ -481,7 +446,7 @@ const Chat = () => {
                           }}
                           onError={(e) => {
                             console.error('Image load error for:', message.filePath);
-                            console.error('Full image URL:', `https://neuroconnectserver.onrender.com${message.filePath}`);
+                            console.error('Full image URL:', `http://localhost:8000${message.filePath}`);
                             console.error('Message data:', message);
                             e.target.style.display = 'none';
                             // Show error message
@@ -507,7 +472,7 @@ const Chat = () => {
                           )}
                         </div>
                         <a
-                          href={`https://neuroconnectserver.onrender.com${message.filePath}`}
+                          href={`http://localhost:8000${message.filePath}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
@@ -635,7 +600,7 @@ const Chat = () => {
             <button
               onClick={() => {
                 const link = document.createElement('a');
-                link.href = `https://neuroconnectserver.onrender.com${selectedImage.filePath}`;
+                link.href = `http://localhost:8000${selectedImage.filePath}`;
                 link.download = selectedImage.fileName || 'image';
                 link.click();
               }}
@@ -649,7 +614,7 @@ const Chat = () => {
             
             {/* Image */}
             <img
-                              src={`https://neuroconnectserver.onrender.com${selectedImage.filePath}`}
+              src={`http://localhost:8000${selectedImage.filePath}`}
               alt={selectedImage.fileName || "Full size image"}
               className="max-w-full max-h-full object-contain rounded-lg"
             />
